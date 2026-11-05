@@ -7,7 +7,12 @@ const professionalsApi = baseApi.injectEndpoints({
       query: () => API_URLS.professionals,
       transformResponse: (response) => response.professionals,
     }),
+
+    getProfessionalCalendar: builder.query({
+      query: (id) => API_URLS.professional(id),
+      providesTags: ['ProfessionalCalendar'],
+    }),
   }),
 })
 
-export const { useGetProfessionalsQuery } = professionalsApi
+export const { useGetProfessionalsQuery, useGetProfessionalCalendarQuery } = professionalsApi

@@ -40,8 +40,8 @@ RSpec.describe "Availability", type: :request do
       expect(response).to have_http_status(:ok)
       expect(json).to include(
         "timezone_label" => "Asia/Singapore (GMT+08:00)",
-        "session_minutes" => WeeklyAvailability::SESSION_MINUTES,
-        "slot_interval_minutes" => WeeklyAvailability::SLOT_INTERVAL_MINUTES,
+        "session_minutes" => SlotGenerator::SESSION_MINUTES,
+        "slot_interval_minutes" => SlotGenerator::SLOT_INTERVAL_MINUTES,
         "break_minutes" => 10
       )
       expect(json["time_options"].first).to eq("value" => 0, "label" => "00:00")

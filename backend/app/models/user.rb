@@ -1,4 +1,5 @@
 class User < ApplicationRecord
+  include MemberRole
   include ProfessionalRole
 
   devise :database_authenticatable, :validatable,
@@ -12,13 +13,5 @@ class User < ApplicationRecord
   normalizes :name, with: ->(name) { name.strip }
 
   validates :name, presence: true, length: { maximum: 100 }
-  validate :timezone_is_iana_identifier
-
-  private
-
-  def timezone_is_iana_identifier
-    return if TZInfo::Timezone.all_identifiers.include?(timezone)
-
-    errors.add(:timezone, "is not a valid IANA timezone")
-  end
+  validates :timezone, iana_timezone: true
 end

@@ -5,11 +5,13 @@ import {
   Container,
   List,
   ListItem,
+  ListItemButton,
   ListItemText,
   Paper,
   Stack,
   Typography,
 } from '@mui/material'
+import { Link as RouterLink } from 'react-router-dom'
 import { errorMessage } from '../api/errors'
 import { useGetProfessionalsQuery } from '../api/professionalsApi'
 
@@ -42,8 +44,10 @@ export function FindProfessionalPage() {
           <Paper variant="outlined">
             <List disablePadding aria-label="Professionals">
               {professionals.map((professional, index) => (
-                <ListItem key={professional.id} divider={index < professionals.length - 1}>
-                  <ListItemText primary={professional.name} secondary={professional.timezone} />
+                <ListItem key={professional.id} divider={index < professionals.length - 1} disablePadding>
+                  <ListItemButton component={RouterLink} to={`/professionals/${professional.id}`}>
+                    <ListItemText primary={professional.name} secondary={professional.timezone} />
+                  </ListItemButton>
                 </ListItem>
               ))}
             </List>

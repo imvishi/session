@@ -2,6 +2,10 @@ class ApplicationController < ActionController::API
   # Secure by default: every endpoint requires a login unless it opts out.
   before_action :authenticate_user!
 
+  rescue_from ActiveRecord::RecordNotFound do
+    render json: { error: "We couldn't find that." }, status: :not_found
+  end
+
   private
 
   def require_professional!

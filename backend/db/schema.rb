@@ -10,9 +10,28 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_05_110000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_06_100000) do
   # These are extensions that must be enabled in order to support this database
+  enable_extension "btree_gist"
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "appointments", force: :cascade do |t|
+    t.bigint "member_id", null: false
+    t.bigint "professional_id", null: false
+    t.date "appointment_date", null: false
+    t.time "start_time", null: false
+    t.time "end_time", null: false
+    t.string "timezone", null: false
+    t.integer "status", limit: 2, default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["member_id", "appointment_date"], name: "index_appointments_on_member_id_and_appointment_date"
+    t.index ["professional_id", "appointment_date"], name: "index_appointments_on_professional_id_and_appointment_date"
+    t.check_constraint "end_time > start_time", name: "appointments_end_after_start"
+    t.check_constraint "member_id <> professional_id", name: "appointments_different_people"
+    t.check_constraint "status = ANY (ARRAY[0, 1])", name: "appointments_status_is_valid"
+    t.exclusion_constraint "professional_id WITH =, tsrange((appointment_date + start_time), (appointment_date + end_time)) WITH &&", where: "status = 0", using: :gist, name: "appointments_no_professional_overlap"
+  end
 
   create_table "users", force: :cascade do |t|
     t.string "name", null: false
@@ -40,5 +59,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_05_110000) do
     t.check_constraint "start_minute >= 0 AND end_minute <= 1439", name: "working_hours_within_one_day"
   end
 
+  add_foreign_key "appointments", "users", column: "member_id"
+  add_foreign_key "appointments", "users", column: "professional_id"
   add_foreign_key "working_hours", "users", column: "professional_id"
 end

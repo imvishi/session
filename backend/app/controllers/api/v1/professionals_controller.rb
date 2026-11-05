@@ -3,6 +3,12 @@ module Api
     class ProfessionalsController < ApplicationController
       before_action :require_member!
 
+      def show
+        professional = User.professional.find(params[:id])
+
+        render json: ProfessionalCalendar.new(professional:, member: current_user).to_h
+      end
+
       def index
         professionals = User.professional.order(:name, :id)
 

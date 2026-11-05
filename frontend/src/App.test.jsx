@@ -90,8 +90,8 @@ describe('routing', () => {
   })
 
   it.each([
-    ['member', () => member, ['ThoughtFull', 'Find a professional']],
-    ['professional', () => professional, ['ThoughtFull', 'Availability']],
+    ['member', () => member, ['ThoughtFull', 'Find a professional', 'My sessions']],
+    ['professional', () => professional, ['ThoughtFull', 'Schedule', 'Availability']],
   ])('gives a %s only their own navbar links', async (_role, currentUser, links) => {
     stubApi({ 'GET /api/v1/me': () => json(200, { user: currentUser() }) })
     renderAt('/')
@@ -650,5 +650,334 @@ describe('find a professional', () => {
     await user.click(retry)
 
     expect(await screen.findByText('Alex Professional')).toBeInTheDocument()
+  })
+})
+
+describe('making an appointment from a professional profile', () => {
+  const path = '/api/v1/professionals/2'
+  const nine = {
+    appointment_date: '2026-11-09',
+    start_at: '09:00:00',
+    end_at: '09:50:00',
+    label: '06:30',
+    professional_label: 'Monday, 9 November at 9:00 AM (Asia/Singapore)',
+  }
+  const ten = {
+    appointment_date: '2026-11-09',
+    start_at: '10:00:00',
+    end_at: '10:50:00',
+    label: '07:30',
+    professional_label: 'Monday, 9 November at 10:00 AM (Asia/Singapore)',
+  }
+
+  function calendar(mondaySlots = [nine, ten]) {
+    return {
+      professional: { id: 2, name: 'Alex Professional' },
+      timezone_label: 'Asia/Kolkata (GMT+05:30)',
+      session_minutes: 50,
+      weekdays: ['Mon', 'Tue'],
+      days: [
+        { date: '2026-11-09', label: 'Monday, 9 November', short_label: '9 Nov', slots: mondaySlots },
+        { date: '2026-11-10', label: 'Tuesday, 10 November', short_label: '10 Nov', slots: [] },
+      ],
+    }
+  }
+
+  function stubMember(routes) {
+    return stubApi({ 'GET /api/v1/me': () => json(200, { user: member }), ...routes })
+  }
+
+  async function chooseNine(user) {
+    await user.click(await screen.findByRole('button', { name: 'Monday, 9 November' }))
+    await user.click(screen.getByRole('button', { name: '06:30' }))
+  }
+
+  it('opens the profile from the list', async () => {
+    stubMember({
+      'GET /api/v1/professionals': () => json(200, { professionals: [{ id: 2, name: 'Alex Professional', timezone: 'UTC' }] }),
+      [`GET ${path}`]: () => json(200, calendar()),
+    })
+    const { user } = renderAt('/professionals')
+
+    await user.click(await screen.findByRole('link', { name: /Alex Professional/ }))
+
+    expect(await screen.findByRole('heading', { name: 'Alex Professional' })).toBeInTheDocument()
+    expect(screen.getByText('Asia/Kolkata (GMT+05:30)')).toBeInTheDocument()
+  })
+
+  it('only lets a date with free times be chosen', async () => {
+    stubMember({ [`GET ${path}`]: () => json(200, calendar()) })
+    renderAt('/professionals/2')
+
+    expect(await screen.findByRole('button', { name: 'Monday, 9 November' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Tuesday, 10 November' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: '06:30' })).not.toBeInTheDocument()
+  })
+
+  it('shows the times the API sends after choosing a date', async () => {
+    stubMember({ [`GET ${path}`]: () => json(200, calendar()) })
+    const { user } = renderAt('/professionals/2')
+
+    const date = await screen.findByRole('button', { name: 'Monday, 9 November' })
+    await user.click(date)
+
+    expect(date).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: '06:30' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '07:30' })).toBeInTheDocument()
+  })
+
+  it("shows the professional's time when hovering over a time", async () => {
+    stubMember({ [`GET ${path}`]: () => json(200, calendar()) })
+    const { user } = renderAt('/professionals/2')
+
+    await user.click(await screen.findByRole('button', { name: 'Monday, 9 November' }))
+    await user.hover(screen.getByRole('button', { name: '06:30' }))
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      "Professional's time: Monday, 9 November at 9:00 AM (Asia/Singapore)",
+    )
+  })
+
+  it('asks for confirmation before making the appointment', async () => {
+    const api = stubMember({ [`GET ${path}`]: () => json(200, calendar()) })
+    const { user } = renderAt('/professionals/2')
+
+    await chooseNine(user)
+
+    expect(screen.getByRole('heading', { name: 'Confirm your appointment' })).toBeInTheDocument()
+    expect(screen.getByText('With Alex Professional')).toBeInTheDocument()
+    expect(screen.getByText('Monday, 9 November at 06:30')).toBeInTheDocument()
+    expect(screen.getByText(/50 minutes, in your time zone/)).toBeInTheDocument()
+    expect(screen.getByText("Professional's time: Monday, 9 November at 9:00 AM (Asia/Singapore)")).toBeInTheDocument()
+    expect(api.requests.map((request) => request.key)).not.toContain('POST /api/v1/appointments')
+  })
+
+  it('can go back from the confirmation screen', async () => {
+    stubMember({ [`GET ${path}`]: () => json(200, calendar()) })
+    const { user } = renderAt('/professionals/2')
+
+    await chooseNine(user)
+    await user.click(screen.getByRole('button', { name: 'Go back' }))
+
+    expect(screen.getByRole('button', { name: '06:30' })).toBeInTheDocument()
+  })
+
+  it('books the slot, sends only its identity, and removes it from the calendar', async () => {
+    let slots = [nine, ten]
+    const api = stubMember({
+      [`GET ${path}`]: () => json(200, calendar(slots)),
+      'POST /api/v1/appointments': () => {
+        slots = [ten]
+        return json(201, { appointment: { id: 1 } })
+      },
+    })
+    const { user } = renderAt('/professionals/2')
+
+    await chooseNine(user)
+    await user.click(screen.getByRole('button', { name: 'Confirm appointment' }))
+
+    expect(await screen.findByText('Your appointment is booked.')).toBeInTheDocument()
+    expect(api.requestTo('POST /api/v1/appointments').body).toEqual({
+      professional_id: 2,
+      appointment_date: '2026-11-09',
+      start_at: '09:00:00',
+      end_at: '09:50:00',
+    })
+
+    await waitFor(() => expect(api.requests.filter((request) => request.key === `GET ${path}`)).toHaveLength(2))
+    await user.click(screen.getByRole('button', { name: 'Book another appointment' }))
+    await user.click(await screen.findByRole('button', { name: 'Monday, 9 November' }))
+
+    expect(screen.queryByRole('button', { name: '06:30' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '07:30' })).toBeInTheDocument()
+  })
+
+  it('explains a lost slot, and refreshes the calendar without it', async () => {
+    let slots = [nine, ten]
+    const message = 'This time has just been booked by someone else. Please choose another.'
+    stubMember({
+      [`GET ${path}`]: () => json(200, calendar(slots)),
+      'POST /api/v1/appointments': () => {
+        slots = [ten]
+        return json(409, { error: message })
+      },
+    })
+    const { user } = renderAt('/professionals/2')
+
+    await chooseNine(user)
+    await user.click(screen.getByRole('button', { name: 'Confirm appointment' }))
+
+    expect(await screen.findByText(message)).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Confirm your appointment' })).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('button', { name: '06:30' })).not.toBeInTheDocument())
+    expect(screen.getByRole('button', { name: '07:30' })).toBeInTheDocument()
+    expect(screen.queryByText('Your appointment is booked.')).not.toBeInTheDocument()
+  })
+
+  it('says so when no times are left on the chosen date', async () => {
+    let slots = [nine]
+    stubMember({
+      [`GET ${path}`]: () => json(200, calendar(slots)),
+      'POST /api/v1/appointments': () => {
+        slots = []
+        return json(409, { error: 'Taken' })
+      },
+    })
+    const { user } = renderAt('/professionals/2')
+
+    await chooseNine(user)
+    await user.click(screen.getByRole('button', { name: 'Confirm appointment' }))
+
+    expect(await screen.findByText('There are no times available in the next 4 weeks.')).toBeInTheDocument()
+  })
+
+  it('shows the API message for a professional that does not exist', async () => {
+    stubMember({ [`GET ${path}`]: () => json(404, { error: "We couldn't find that." }) })
+    renderAt('/professionals/2')
+
+    expect(await screen.findByText("We couldn't find that.")).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'All professionals' })).toBeInTheDocument()
+  })
+
+  it('keeps a professional away from the page', async () => {
+    const api = stubApi({ 'GET /api/v1/me': () => json(200, { user: professional }) })
+    renderAt('/professionals/2')
+
+    expect(await screen.findByRole('heading', { name: 'Welcome, Pat Professional' })).toBeInTheDocument()
+    expect(api.requests.map((request) => request.key)).not.toContain(`GET ${path}`)
+  })
+
+  it('goes from the booked message to my sessions, which include the new appointment', async () => {
+    let upcoming = []
+    stubMember({
+      [`GET ${path}`]: () => json(200, calendar()),
+      'POST /api/v1/appointments': () => {
+        upcoming = [{ ...mondaySession, id: 1 }]
+        return json(201, { appointment: { id: 1 } })
+      },
+      'GET /api/v1/appointments': () => json(200, { timezone: 'Asia/Kolkata', upcoming, past: [] }),
+    })
+    const { user } = renderAt('/professionals/2')
+
+    await chooseNine(user)
+    await user.click(screen.getByRole('button', { name: 'Confirm appointment' }))
+    await user.click(await screen.findByRole('link', { name: 'View my sessions' }))
+
+    const list = await screen.findByRole('list', { name: 'Upcoming' })
+    expect(within(list).getByText('Monday, 9 November 2026, 6:30 AM – 7:20 AM')).toBeInTheDocument()
+  })
+})
+
+const mondaySession = {
+  id: 1,
+  status: 'booked',
+  date_label: 'Monday, 9 November 2026',
+  time_label: '6:30 AM – 7:20 AM',
+  professional: { id: 2, name: 'Alex Professional' },
+}
+
+describe('my sessions, for a member', () => {
+  const pastSession = {
+    id: 2,
+    status: 'booked',
+    date_label: 'Monday, 2 November 2026',
+    time_label: '6:30 AM – 7:20 AM',
+    professional: { id: 3, name: 'Zoe Professional' },
+  }
+
+  function stubSessions(response) {
+    return stubApi({
+      'GET /api/v1/me': () => json(200, { user: member }),
+      'GET /api/v1/appointments': response,
+    })
+  }
+
+  it('links to the page from the navbar', async () => {
+    stubSessions(() => json(200, { timezone: 'Asia/Kolkata', upcoming: [], past: [] }))
+    const { user } = renderAt('/')
+
+    await user.click(await screen.findByRole('link', { name: 'My sessions' }))
+
+    expect(await screen.findByRole('heading', { name: 'My sessions' })).toBeInTheDocument()
+  })
+
+  it('shows upcoming and past sessions as the API sends them, with the timezone', async () => {
+    stubSessions(() => json(200, { timezone: 'Asia/Kolkata', upcoming: [mondaySession], past: [pastSession] }))
+    renderAt('/sessions')
+
+    const upcoming = await screen.findByRole('list', { name: 'Upcoming' })
+    const past = screen.getByRole('list', { name: 'Past' })
+
+    expect(within(upcoming).getByRole('listitem')).toHaveTextContent('Monday, 9 November 2026, 6:30 AM – 7:20 AMWith Alex Professional')
+    expect(within(past).getByRole('listitem')).toHaveTextContent('Monday, 2 November 2026, 6:30 AM – 7:20 AMWith Zoe Professional')
+    expect(screen.getByText('Asia/Kolkata')).toBeInTheDocument()
+  })
+
+  it('marks a cancelled session', async () => {
+    stubSessions(() => json(200, { timezone: 'Asia/Kolkata', upcoming: [{ ...mondaySession, status: 'cancelled' }], past: [] }))
+    renderAt('/sessions')
+
+    expect(within(await screen.findByRole('list', { name: 'Upcoming' })).getByText('Cancelled')).toBeInTheDocument()
+  })
+
+  it('says so when there are no sessions', async () => {
+    stubSessions(() => json(200, { timezone: 'Asia/Kolkata', upcoming: [], past: [] }))
+    renderAt('/sessions')
+
+    expect(await screen.findByText('You have no upcoming sessions.')).toBeInTheDocument()
+    expect(screen.getByText('You have no past sessions.')).toBeInTheDocument()
+  })
+
+  it('offers a retry when the sessions fail to load', async () => {
+    let respond = () => json(500, {})
+    stubSessions(() => respond())
+    const { user } = renderAt('/sessions')
+
+    const retry = await screen.findByRole('button', { name: 'Try again' })
+    respond = () => json(200, { timezone: 'Asia/Kolkata', upcoming: [mondaySession], past: [] })
+    await user.click(retry)
+
+    expect(await screen.findByText('With Alex Professional')).toBeInTheDocument()
+  })
+})
+
+describe('schedule, for a professional', () => {
+  const scheduled = {
+    id: 1,
+    status: 'booked',
+    date_label: 'Monday, 9 November 2026',
+    time_label: '9:00 AM – 9:50 AM',
+    member: { id: 1, name: 'Sam Member' },
+  }
+
+  it('links to the page from the navbar, and shows the upcoming sessions with member names', async () => {
+    stubApi({
+      'GET /api/v1/me': () => json(200, { user: professional }),
+      'GET /api/v1/appointments': () => json(200, { timezone: 'Asia/Singapore', upcoming: [scheduled] }),
+    })
+    const { user } = renderAt('/')
+
+    await user.click(await screen.findByRole('link', { name: 'Schedule' }))
+
+    const list = await screen.findByRole('list', { name: 'Upcoming' })
+    expect(within(list).getByRole('listitem')).toHaveTextContent('Monday, 9 November 2026, 9:00 AM – 9:50 AMWith Sam Member')
+    expect(screen.queryByRole('heading', { name: 'Past' })).not.toBeInTheDocument()
+  })
+
+  it('says so when nothing is booked', async () => {
+    stubApi({
+      'GET /api/v1/me': () => json(200, { user: professional }),
+      'GET /api/v1/appointments': () => json(200, { timezone: 'Asia/Singapore', upcoming: [] }),
+    })
+    renderAt('/schedule')
+
+    expect(await screen.findByText('You have no upcoming sessions.')).toBeInTheDocument()
+  })
+
+  it('keeps a member away from the schedule page', async () => {
+    stubApi({ 'GET /api/v1/me': () => json(200, { user: member }) })
+    renderAt('/schedule')
+
+    expect(await screen.findByRole('heading', { name: 'Welcome, Sam Member' })).toBeInTheDocument()
   })
 })

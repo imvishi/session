@@ -15,7 +15,8 @@ Rails.application.routes.draw do
       get "me", to: "me#show"
 
       resource :availability, only: [ :show, :update ]
-      resources :professionals, only: [ :index ]
+      resources :professionals, only: [ :index, :show ]
+      resources :appointments, only: [ :create ]
     end
   end
 

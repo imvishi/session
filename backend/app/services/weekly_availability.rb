@@ -1,6 +1,4 @@
 class WeeklyAvailability
-  SESSION_MINUTES = 50
-  SLOT_INTERVAL_MINUTES = 60
   DISPLAY_ORDER = [ 1, 2, 3, 4, 5, 6, 0 ].freeze
   DEFAULT_START_MINUTE = 9 * 60
   DEFAULT_END_MINUTE = 17 * 60
@@ -26,9 +24,9 @@ class WeeklyAvailability
   def to_h
     {
       timezone_label:,
-      session_minutes: SESSION_MINUTES,
-      slot_interval_minutes: SLOT_INTERVAL_MINUTES,
-      break_minutes: SLOT_INTERVAL_MINUTES - SESSION_MINUTES,
+      session_minutes: SlotGenerator::SESSION_MINUTES,
+      slot_interval_minutes: SlotGenerator::SLOT_INTERVAL_MINUTES,
+      break_minutes: SlotGenerator::SLOT_INTERVAL_MINUTES - SlotGenerator::SESSION_MINUTES,
       time_options:,
       days:
     }
@@ -54,9 +52,9 @@ class WeeklyAvailability
   end
 
   def session_length_errors(record)
-    return [] if record.end_minute - record.start_minute >= SESSION_MINUTES
+    return [] if record.end_minute - record.start_minute >= SlotGenerator::SESSION_MINUTES
 
-    [ "End time must be at least #{SESSION_MINUTES} minutes after the start time" ]
+    [ "End time must be at least #{SlotGenerator::SESSION_MINUTES} minutes after the start time" ]
   end
 
   # Runs after validation, so an invalid day isn't reported as a duplicate as well.
@@ -73,10 +71,6 @@ class WeeklyAvailability
     "#{@professional.timezone} (GMT#{offset})"
   end
 
-  def slot_count(hours)
-    hours.start_minute.step(hours.end_minute - SESSION_MINUTES, SLOT_INTERVAL_MINUTES).count
-  end
-
   def days
     hours_by_day = @professional.working_hours.reload.index_by(&:day_of_week)
 
@@ -89,7 +83,7 @@ class WeeklyAvailability
         working: hours.present?,
         start_minute: hours&.start_minute || DEFAULT_START_MINUTE,
         end_minute: hours&.end_minute || DEFAULT_END_MINUTE,
-        slot_count: hours && slot_count(hours)
+        slot_count: hours && SlotGenerator.slots_per_day(hours)
       }
     end
   end

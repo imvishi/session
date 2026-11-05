@@ -8,6 +8,7 @@ abort("The Rails environment is running in production mode!") if Rails.env.produ
 # that will avoid rails generators crashing because migrations haven't been run yet
 # return unless Rails.env.test?
 require 'rspec/rails'
+require_relative 'support/appointment_helpers'
 # Add additional requires below this line. Rails is not loaded until this point!
 
 # Requires supporting ruby files with custom matchers and macros, etc, in
@@ -70,7 +71,7 @@ RSpec.configure do |config|
   # arbitrary gems may also be filtered via:
   # config.filter_gems_from_backtrace("gem name")
 
-  # Lets specs use travel/freeze_time for expiry and, later, booking time rules.
+  # Lets specs use travel/freeze_time for expiry and, later, appointment time rules.
   config.include ActiveSupport::Testing::TimeHelpers
   config.after { travel_back }
 end

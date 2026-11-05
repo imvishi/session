@@ -7,4 +7,6 @@ export const API_URLS = {
   logout: '/api/v1/auth/logout',
   availability: '/api/v1/availability',
   professionals: '/api/v1/professionals',
+  professional: (id) => `/api/v1/professionals/${id}`,
+  appointments: '/api/v1/appointments',
 }
