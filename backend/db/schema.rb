@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_05_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_05_110000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -26,4 +26,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_05_100000) do
     t.check_constraint "email::text = lower(email::text)", name: "users_email_is_lowercase"
     t.check_constraint "role::text = ANY (ARRAY['member'::character varying, 'professional'::character varying]::text[])", name: "users_role_is_valid"
   end
+
+  create_table "working_hours", force: :cascade do |t|
+    t.bigint "professional_id", null: false
+    t.integer "day_of_week", limit: 2, null: false
+    t.integer "start_minute", limit: 2, null: false
+    t.integer "end_minute", limit: 2, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["professional_id", "day_of_week"], name: "index_working_hours_on_professional_id_and_day_of_week", unique: true
+    t.check_constraint "day_of_week >= 0 AND day_of_week <= 6", name: "working_hours_day_is_valid"
+    t.check_constraint "end_minute > start_minute", name: "working_hours_end_after_start"
+    t.check_constraint "start_minute >= 0 AND end_minute <= 1439", name: "working_hours_within_one_day"
+  end
+
+  add_foreign_key "working_hours", "users", column: "professional_id"
 end

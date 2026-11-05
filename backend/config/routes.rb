@@ -13,6 +13,9 @@ Rails.application.routes.draw do
       end
 
       get "me", to: "me#show"
+
+      resource :availability, only: [ :show, :update ]
+      resources :professionals, only: [ :index ]
     end
   end
 

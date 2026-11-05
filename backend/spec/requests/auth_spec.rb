@@ -138,6 +138,7 @@ RSpec.describe "Authentication", type: :request do
       login(password: "wrong-password")
       expect(response).to have_http_status(:unauthorized)
       expect(set_cookie_header).not_to include(cookie_name)
+      expect(response.parsed_body["error"]).to eq("Invalid email or password.")
       wrong_password_body = response.body
 
       login(email: "nobody@example.com")
@@ -178,7 +179,7 @@ RSpec.describe "Authentication", type: :request do
       get me_path
 
       expect(response).to have_http_status(:unauthorized)
-      expect(response.parsed_body["error"]).to be_present
+      expect(response.parsed_body["error"]).to eq("You need to sign in or sign up before continuing.")
     end
 
     it "identifies the user from the token, never from client-supplied params" do

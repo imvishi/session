@@ -1,4 +1,6 @@
 class User < ApplicationRecord
+  include ProfessionalRole
+
   devise :database_authenticatable, :validatable,
          :jwt_authenticatable, jwt_revocation_strategy: Devise::JWT::RevocationStrategies::Null
 

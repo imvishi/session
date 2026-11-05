@@ -29,3 +29,8 @@
 
 en:
   hello: "Hello world"
+  activerecord:
+    attributes:
+      working_hour:
+        start_minute: "Start time"
+        end_minute: "End time"
