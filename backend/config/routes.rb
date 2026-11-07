@@ -22,6 +22,9 @@ Rails.application.routes.draw do
           post :reschedule
         end
       end
+      resources :notifications, only: [ :index ] do
+        post :read_all, on: :collection
+      end
     end
   end
 

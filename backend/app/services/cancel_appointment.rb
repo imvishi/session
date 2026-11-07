@@ -9,6 +9,7 @@ class CancelAppointment
     @appointment.with_lock do
       AppointmentPolicy.new(@appointment, @user).check!
       @appointment.cancelled!
+      ScheduleReminders.new(@appointment).call
     end
 
     @appointment

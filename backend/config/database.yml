@@ -21,8 +21,14 @@ default: &default
 
 
 development:
-  <<: *default
-  database: thoughfull_development
+  primary:
+    <<: *default
+    database: thoughfull_development
+  # Solid Queue's jobs, including the recurring reminder delivery, so they survive a restart.
+  queue:
+    <<: *default
+    database: thoughfull_development_queue
+    migrations_paths: db/queue_migrate
 
   # The specified database role being used to connect to PostgreSQL.
   # To create additional roles in PostgreSQL see `$ createuser --help`.

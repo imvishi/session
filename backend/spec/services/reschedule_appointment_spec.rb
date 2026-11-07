@@ -26,6 +26,22 @@ RSpec.describe RescheduleAppointment do
     expect(Appointment.count).to eq(1)
   end
 
+  it "moves the reminders to the new time" do
+    ScheduleReminders.new(appointment).call
+
+    reschedule(tuesday_nine)
+
+    expect(appointment.reminders.pending.pluck(:remind_at).uniq).to contain_exactly(tuesday_nine - 24.hours, tuesday_nine - 1.hour)
+  end
+
+  it "keeps the reminders if the reschedule fails" do
+    ScheduleReminders.new(appointment).call
+    book(create_person("Other Member", role: "member"), professional, tuesday_nine)
+
+    expect { reschedule(tuesday_nine) }.to raise_error(BookAppointment::Unavailable)
+    expect(appointment.reminders.pending.pluck(:remind_at).uniq).to contain_exactly(monday_nine - 24.hours, monday_nine - 1.hour)
+  end
+
   it "can be done again and again" do
     reschedule(tuesday_nine)
     reschedule(monday_ten)

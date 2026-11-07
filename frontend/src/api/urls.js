@@ -11,4 +11,6 @@ export const API_URLS = {
   appointments: '/api/v1/appointments',
   cancelAppointment: (id) => `/api/v1/appointments/${id}/cancel`,
   rescheduleAppointment: (id) => `/api/v1/appointments/${id}/reschedule`,
+  notifications: '/api/v1/notifications',
+  readAllNotifications: '/api/v1/notifications/read_all',
 }

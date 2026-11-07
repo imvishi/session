@@ -17,6 +17,7 @@ class RescheduleAppointment
         slot = SlotGenerator.new(professional).find(**@new_slot) or raise BookAppointment::Unavailable, BookAppointment::NOT_A_SLOT
 
         @appointment.update!(slot.local_attributes(professional.timezone))
+        ScheduleReminders.new(@appointment).call
       end
     end
 

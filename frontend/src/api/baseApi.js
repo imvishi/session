@@ -22,7 +22,7 @@ async function fetchHandlingExpiredLogin(args, queryApi, extraOptions) {
 /** Each feature adds its own endpoints to this, in its own file, using injectEndpoints. */
 export const baseApi = createApi({
   baseQuery: fetchHandlingExpiredLogin,
-  tagTypes: ['ProfessionalCalendar', 'MySessions'],
+  tagTypes: ['ProfessionalCalendar', 'MySessions', 'Notifications'],
   endpoints: () => ({}),
 })
 

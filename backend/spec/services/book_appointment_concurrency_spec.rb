@@ -8,6 +8,7 @@ RSpec.describe BookAppointment, "at the same moment" do
   self.use_transactional_tests = false
 
   after do
+    Reminder.delete_all
     Appointment.delete_all
     WorkingHour.delete_all
     User.delete_all
@@ -92,6 +93,19 @@ RSpec.describe BookAppointment, "at the same moment" do
     expect(results).to eq(%i[booked booked])
     expect(Appointment.booked.where(member:).count).to eq(1)
     expect([ second_slot, third_slot ]).to include(appointment.reload.starts_at_utc)
+  end
+
+  it "delivers a reminder once when its job runs twice at the same moment" do
+    professional = working_every_day("Pat Professional")
+    member = create_person("Sam Member", role: "member")
+    slot = SlotGenerator.new(professional).slots(from: 2.days.from_now, to: 2.weeks.from_now).first.starts_at
+    reminder = book_now(member, professional, slot).reminders.first
+
+    results = race(Array.new(2) { -> { DeliverReminder.new(reminder.id).call } })
+
+    expect(results).to eq(%i[booked booked])
+    expect(reminder.reload.delivered_at).to be_present
+    expect(Reminder.delivered.count).to eq(1)
   end
 
   def book_now(member, professional, starts_at)

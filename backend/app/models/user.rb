@@ -10,6 +10,8 @@ class User < ApplicationRecord
   # A role is chosen at sign-up and can never change.
   attr_readonly :role
 
+  has_many :reminders, dependent: :restrict_with_error
+
   normalizes :name, with: ->(name) { name.strip }
 
   validates :name, presence: true, length: { maximum: 100 }

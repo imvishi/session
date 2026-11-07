@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_06_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_07_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "btree_gist"
   enable_extension "pg_catalog.plpgsql"
@@ -31,6 +31,23 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_06_100000) do
     t.check_constraint "member_id <> professional_id", name: "appointments_different_people"
     t.check_constraint "status = ANY (ARRAY[0, 1])", name: "appointments_status_is_valid"
     t.exclusion_constraint "professional_id WITH =, tsrange((appointment_date + start_time), (appointment_date + end_time)) WITH &&", where: "status = 0", using: :gist, name: "appointments_no_professional_overlap"
+  end
+
+  create_table "reminders", force: :cascade do |t|
+    t.bigint "appointment_id", null: false
+    t.bigint "user_id", null: false
+    t.integer "minutes_before", null: false
+    t.datetime "remind_at", null: false
+    t.datetime "delivered_at"
+    t.text "message"
+    t.datetime "read_at"
+    t.string "job_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["appointment_id"], name: "index_reminders_on_appointment_id"
+    t.index ["user_id", "delivered_at"], name: "index_reminders_delivered", where: "(delivered_at IS NOT NULL)"
+    t.check_constraint "delivered_at IS NULL OR message IS NOT NULL", name: "reminders_delivered_with_message"
+    t.check_constraint "minutes_before > 0", name: "reminders_minutes_before_is_positive"
   end
 
   create_table "users", force: :cascade do |t|
@@ -61,5 +78,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_06_100000) do
 
   add_foreign_key "appointments", "users", column: "member_id"
   add_foreign_key "appointments", "users", column: "professional_id"
+  add_foreign_key "reminders", "appointments"
+  add_foreign_key "reminders", "users"
   add_foreign_key "working_hours", "users", column: "professional_id"
 end

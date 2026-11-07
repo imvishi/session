@@ -31,6 +31,19 @@ RSpec.describe BookAppointment do
     )
   end
 
+  it "schedules the reminders for both people" do
+    appointment = book_slot(monday_nine)
+
+    expect(appointment.reminders.pending.count).to eq(4)
+  end
+
+  it "schedules no reminders when the booking fails" do
+    book_slot(monday_nine, as: create_person("Other Member", role: "member"))
+
+    expect { book_slot(monday_nine) }.to raise_error(described_class::Unavailable)
+    expect(Reminder.count).to eq(4)
+  end
+
   it "stores the professional's local time and timezone, not the member's" do
     member.update!(timezone: "Asia/Kolkata")
 

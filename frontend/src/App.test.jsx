@@ -21,8 +21,14 @@ function json(status, body) {
 
 const unauthorized = () => json(401, { error: 'You need to sign in or sign up before continuing.' })
 
-/** Stubs fetch with one handler per "METHOD /path". Anything else fails the test. */
-function stubApi(routes) {
+const noNotifications = () => json(200, { unread_count: 0, notifications: [] })
+
+/**
+ * Stubs fetch with one handler per "METHOD /path". Anything else fails the test.
+ * Every logged-in page asks for notifications, so there are none unless a test says otherwise.
+ */
+function stubApi(givenRoutes) {
+  const routes = { 'GET /api/v1/notifications': noNotifications, ...givenRoutes }
   const requests = []
   vi.stubGlobal(
     'fetch',
@@ -90,8 +96,8 @@ describe('routing', () => {
   })
 
   it.each([
-    ['member', () => member, ['ThoughtFull', 'Find a professional', 'My sessions']],
-    ['professional', () => professional, ['ThoughtFull', 'Schedule', 'Availability']],
+    ['member', () => member, ['ThoughtFull', 'Find a professional', 'My sessions', 'Notifications']],
+    ['professional', () => professional, ['ThoughtFull', 'Schedule', 'Availability', 'Notifications']],
   ])('gives a %s only their own navbar links', async (_role, currentUser, links) => {
     stubApi({ 'GET /api/v1/me': () => json(200, { user: currentUser() }) })
     renderAt('/')
@@ -1103,5 +1109,61 @@ describe('cancelling and rescheduling', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel session' }))
 
     await waitFor(() => expect(api.requests.map((request) => request.key)).toContain('POST /api/v1/appointments/1/cancel'))
+  })
+})
+
+describe('notifications', () => {
+  const reminder = {
+    id: 7,
+    message: 'Your session with Alex Professional starts in 1 hour, on Monday, 9 November 2026 at 6:30 AM (Asia/Kolkata).',
+    read: false,
+    delivered_label: '9 Nov, 5:30 AM',
+    delivered_at: '2026-11-09T00:00:00.123456Z',
+  }
+
+  it.each([
+    ['member', () => member],
+    ['professional', () => professional],
+  ])('shows the unread count in the navbar for a %s, and opens the list', async (_role, currentUser) => {
+    stubApi({
+      'GET /api/v1/me': () => json(200, { user: currentUser() }),
+      'GET /api/v1/notifications': () => json(200, { unread_count: 1, notifications: [reminder] }),
+    })
+    const { user } = renderAt('/')
+
+    await user.click(await screen.findByRole('link', { name: 'Notifications, 1 unread' }))
+
+    const list = await screen.findByRole('list', { name: 'Notifications' })
+    expect(within(list).getByRole('listitem')).toHaveTextContent(reminder.message)
+    expect(within(list).getByRole('listitem')).toHaveTextContent('9 Nov, 5:30 AM · New')
+  })
+
+  it('marks all as read', async () => {
+    let read = false
+    const api = stubApi({
+      'GET /api/v1/me': () => json(200, { user: member }),
+      'GET /api/v1/notifications': () =>
+        json(200, { unread_count: read ? 0 : 1, notifications: [{ ...reminder, read }] }),
+      'POST /api/v1/notifications/read_all': () => {
+        read = true
+        return new Response(null, { status: 204 })
+      },
+    })
+    const { user } = renderAt('/notifications')
+
+    await user.click(await screen.findByRole('button', { name: 'Mark all as read' }))
+
+    expect(await screen.findByRole('link', { name: 'Notifications' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Mark all as read' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/New/)).not.toBeInTheDocument()
+    expect(api.requestTo('POST /api/v1/notifications/read_all').body).toEqual({ delivered_until: reminder.delivered_at })
+  })
+
+  it('explains when there are none yet', async () => {
+    stubApi({ 'GET /api/v1/me': () => json(200, { user: member }) })
+    renderAt('/notifications')
+
+    expect(await screen.findByText(/You have no notifications yet/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Notifications' })).toBeInTheDocument()
   })
 })

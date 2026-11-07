@@ -17,6 +17,12 @@ RSpec.describe CancelAppointment do
     expect(cancel(member).reload).to be_cancelled
   end
 
+  it "removes the reminders that haven't been delivered" do
+    ScheduleReminders.new(appointment).call
+
+    expect { cancel(member) }.to change { appointment.reminders.pending.count }.from(4).to(0)
+  end
+
   it "stops a member cancelling within 24 hours, and keeps the session" do
     travel_to Time.utc(2026, 11, 8, 2, 0)
 

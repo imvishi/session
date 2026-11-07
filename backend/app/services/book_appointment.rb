@@ -30,7 +30,10 @@ class BookAppointment
     slot = SlotGenerator.new(@professional).find(**@requested) or raise Unavailable, NOT_A_SLOT
 
     self.class.explaining_failures do
-      Appointment.create!(member: @member, professional: @professional, **slot.local_attributes(@professional.timezone))
+      Appointment.transaction do
+        Appointment.create!(member: @member, professional: @professional, **slot.local_attributes(@professional.timezone))
+                   .tap { |appointment| ScheduleReminders.new(appointment).call }
+      end
     end
   end
 end

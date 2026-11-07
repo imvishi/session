@@ -3,6 +3,7 @@ class Appointment < ApplicationRecord
 
   belongs_to :member, class_name: "User", inverse_of: :member_appointments
   belongs_to :professional, class_name: "User", inverse_of: :professional_appointments
+  has_many :reminders, dependent: :restrict_with_error
 
   enum :status, { booked: 0, cancelled: 1 }, validate: true
 
