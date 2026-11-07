@@ -42,7 +42,7 @@ export function AppLayout({ links }) {
         <Container maxWidth="md" disableGutters>
           <Toolbar component="nav" aria-label="Main" sx={{ gap: 1.5 }}>
             <Link component={RouterLink} to="/" variant="h6" underline="none" sx={{ fontWeight: 600 }}>
-              ThoughtFull
+              Appointment
             </Link>
             {links.map(({ to, label }) => (
               <Button

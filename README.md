@@ -7,6 +7,10 @@ schedule and can cancel. Every time is shown on the viewer's own clock.
 - **Backend:** Rails 8.1 API (Ruby 3.4.7), PostgreSQL, Devise + devise-jwt, Solid Queue
 - **Frontend:** React 19, Vite, MUI, Redux Toolkit Query
 
+**Live demo:** https://appointment-web.onrender.com. It's hosted on Render's free tier
+(see [render.yaml](render.yaml)), so the first request after 15 idle minutes can take about a minute
+while the API wakes up.
+
 Design decisions and trade-offs are in [DECISIONS.md](DECISIONS.md).
 
 ## Run it with Docker (recommended)

@@ -1,0 +1,48 @@
+# Render Blueprint (free tier): the Rails API as a Docker web service, the React app as a static site.
+# Both use the Postgres instance already created in the Render dashboard (see DATABASE_NAME below).
+#
+# The static site forwards /api/* to the API, so the browser sees one origin and the
+# SameSite=Strict auth cookie works. (*.onrender.com subdomains count as different sites.)
+services:
+  - type: web
+    name: thoughfull-api
+    runtime: docker
+    plan: free
+    # Must be the same region as the database, so the internal connection URL works.
+    region: oregon
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    # Without Thruster: Puma listens on Render's $PORT. config/puma.rb runs db:prepare first
+    # (creating the queue database on first boot), because the free tier has no pre-deploy command.
+    dockerCommand: ./bin/rails server
+    healthCheckPath: /up
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: thoughfull-db # <- the name of your Render Postgres instance
+          property: connectionString
+      - key: SECRET_KEY_BASE
+        generateValue: true
+      # The free tier has no background workers, so Solid Queue (reminders) runs inside Puma.
+      - key: SOLID_QUEUE_IN_PUMA
+        value: "true"
+      - key: FRONTEND_ORIGIN
+        value: https://appointment-web.onrender.com
+
+  - type: web
+    name: appointment-web
+    runtime: static
+    buildCommand: cd frontend && npm ci && npm run build
+    staticPublishPath: ./frontend/dist
+    envVars:
+      # Empty: the frontend calls /api/... on its own origin, and the rewrite below forwards it.
+      - key: VITE_API_URL
+        value: ""
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://thoughfull-api.onrender.com/api/*
+      # Client-side routing: every other path serves the React app.
+      - type: rewrite
+        source: /*
+        destination: /index.html

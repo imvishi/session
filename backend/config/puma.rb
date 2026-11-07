@@ -25,6 +25,11 @@
 # Any libraries that use a connection pool or another resource pool should
 # be configured to provide at least as many connections as the number of
 # threads. This includes Active Record's `pool` parameter in `database.yml`.
+# On Render (which sets RENDER=true), create and migrate the databases before Puma and Solid Queue
+# start: the free tier has no pre-deploy command, and a dashboard Docker Command skips the image's
+# entrypoint, so this can't rely on bin/docker-entrypoint.
+system("./bin/rails db:prepare", exception: true) if ENV["RENDER"] == "true"
+
 threads_count = ENV.fetch("RAILS_MAX_THREADS", 3)
 threads threads_count, threads_count
 

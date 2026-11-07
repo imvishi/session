@@ -94,21 +94,14 @@ test:
 # Read https://guides.rubyonrails.org/configuring.html#configuring-a-database
 # for a full overview on how database connection configuration can be specified.
 #
+# Render (free tier) gives one Postgres instance and a DATABASE_URL. The app's tables go in that
+# database; Solid Queue's go in a sibling database on the same instance ("<name>_queue"), which
+# db:prepare creates on first boot. Cache and Action Cable don't need a database in production.
 production:
-  primary: &primary_production
+  primary:
     <<: *default
-    database: thoughfull_production
-    username: thoughfull
-    password: <%= ENV["THOUGHFULL_DATABASE_PASSWORD"] %>
-  cache:
-    <<: *primary_production
-    database: thoughfull_production_cache
-    migrations_paths: db/cache_migrate
+    url: <%= ENV["DATABASE_URL"] %>
   queue:
-    <<: *primary_production
-    database: thoughfull_production_queue
+    <<: *default
+    url: <%= ENV["QUEUE_DATABASE_URL"] || (ENV["DATABASE_URL"].present? && URI(ENV["DATABASE_URL"]).tap { |uri| uri.path = "#{uri.path}_queue" }.to_s) %>
     migrations_paths: db/queue_migrate
-  cable:
-    <<: *primary_production
-    database: thoughfull_production_cable
-    migrations_paths: db/cable_migrate

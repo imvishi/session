@@ -96,8 +96,8 @@ describe('routing', () => {
   })
 
   it.each([
-    ['member', () => member, ['ThoughtFull', 'Find a professional', 'My sessions', 'Notifications']],
-    ['professional', () => professional, ['ThoughtFull', 'Schedule', 'Availability', 'Notifications']],
+    ['member', () => member, ['Appointment', 'Find a professional', 'My sessions', 'Notifications']],
+    ['professional', () => professional, ['Appointment', 'Schedule', 'Availability', 'Notifications']],
   ])('gives a %s only their own navbar links', async (_role, currentUser, links) => {
     stubApi({ 'GET /api/v1/me': () => json(200, { user: currentUser() }) })
     renderAt('/')
@@ -414,7 +414,7 @@ describe('availability', () => {
     })
     const { user } = renderAt('/availability')
 
-    await user.click(await screen.findByRole('link', { name: 'ThoughtFull' }))
+    await user.click(await screen.findByRole('link', { name: 'Appointment' }))
     expect(await screen.findByRole('heading', { name: 'Welcome, Pat Professional' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('link', { name: 'Availability' }))
