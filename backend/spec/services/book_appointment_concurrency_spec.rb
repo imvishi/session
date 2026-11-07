@@ -13,15 +13,16 @@ RSpec.describe BookAppointment, "at the same moment" do
     User.delete_all
   end
 
+  # Each attempt is a block, run in its own thread and connection, all starting together.
   def race(attempts)
     start = Concurrent::CountDownLatch.new(1)
     threads = attempts.map do |attempt|
       Thread.new do
         ActiveRecord::Base.connection_pool.with_connection do
           start.wait
-          described_class.new(**attempt).call
+          attempt.call
           :booked
-        rescue described_class::Unavailable => error
+        rescue BookAppointment::Unavailable, AppointmentPolicy::NotAllowed => error
           error.message
         rescue StandardError => error
           # Reported in the results, so every thread finishes before the cleanup runs.
@@ -57,7 +58,7 @@ RSpec.describe BookAppointment, "at the same moment" do
     starts_at = next_slot(professional)
     members = (1..4).map { |number| create_person("Member #{number}", role: "member") }
 
-    results = race(members.map { |member| { member:, professional:, **slot_params(starts_at, professional) } })
+    results = race(members.map { |member| -> { book_now(member, professional, starts_at) } })
 
     # A request that deadlocks on the constraint check is told to try later instead.
     expect(results.count(:booked)).to eq(1)
@@ -71,12 +72,29 @@ RSpec.describe BookAppointment, "at the same moment" do
     member = create_person("Sam Member", role: "member")
     first_slot, second_slot = overlapping_slots(first, second)
 
-    results = race([
-      { member:, professional: first, **slot_params(first_slot, first) },
-      { member:, professional: second, **slot_params(second_slot, second) }
-    ])
+    results = race([ -> { book_now(member, first, first_slot) }, -> { book_now(member, second, second_slot) } ])
 
     expect(results).to eq(%i[booked booked])
     expect(Appointment.booked.count).to eq(2)
+  end
+
+  it "runs two reschedules of the same session one after the other, leaving one session" do
+    professional = working_every_day("Pat Professional")
+    member = create_person("Sam Member", role: "member")
+    first_slot, second_slot, third_slot = SlotGenerator.new(professional).slots(from: 2.days.from_now, to: 2.weeks.from_now).first(3).map(&:starts_at)
+    appointment = book_now(member, professional, first_slot)
+
+    results = race([ second_slot, third_slot ].map do |slot|
+      -> { RescheduleAppointment.new(appointment: Appointment.find(appointment.id), **slot_params(slot, professional)).call }
+    end)
+
+    # The lock makes them take turns, so the session ends at whichever ran last.
+    expect(results).to eq(%i[booked booked])
+    expect(Appointment.booked.where(member:).count).to eq(1)
+    expect([ second_slot, third_slot ]).to include(appointment.reload.starts_at_utc)
+  end
+
+  def book_now(member, professional, starts_at)
+    described_class.new(member:, professional:, **slot_params(starts_at, professional)).call
   end
 end

@@ -981,3 +981,127 @@ describe('schedule, for a professional', () => {
     expect(await screen.findByRole('heading', { name: 'Welcome, Sam Member' })).toBeInTheDocument()
   })
 })
+
+describe('cancelling and rescheduling', () => {
+  const changeable = { ...mondaySession, can_cancel: true, can_reschedule: true, notice: null }
+  const sessionsPath = 'GET /api/v1/appointments'
+
+  function sessions(upcoming) {
+    return json(200, { timezone: 'Asia/Kolkata', upcoming, past: [] })
+  }
+
+  function stubAs(user, routes) {
+    return stubApi({ 'GET /api/v1/me': () => json(200, { user }), ...routes })
+  }
+
+  it('cancels after confirming, and shows the session as cancelled', async () => {
+    let upcoming = [changeable]
+    const api = stubAs(member, {
+      [sessionsPath]: () => sessions(upcoming),
+      'POST /api/v1/appointments/1/cancel': () => {
+        upcoming = [{ ...mondaySession, status: 'cancelled', can_cancel: false, can_reschedule: false, notice: null }]
+        return json(200, { appointment: { id: 1, status: 'cancelled' } })
+      },
+    })
+    const { user } = renderAt('/sessions')
+
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }))
+    const dialog = screen.getByRole('dialog', { name: 'Cancel this session?' })
+    expect(dialog).toHaveTextContent('Monday, 9 November 2026, 6:30 AM – 7:20 AM, with Alex Professional.')
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel session' }))
+
+    expect(await screen.findByText('Cancelled')).toBeInTheDocument()
+    expect(api.requests.map((request) => request.key)).toContain('POST /api/v1/appointments/1/cancel')
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the session when the member changes their mind', async () => {
+    const api = stubAs(member, { [sessionsPath]: () => sessions([changeable]) })
+    const { user } = renderAt('/sessions')
+
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }))
+    await user.click(screen.getByRole('button', { name: 'Keep it' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(api.requests.map((request) => request.key)).not.toContain('POST /api/v1/appointments/1/cancel')
+  })
+
+  it("shows the API's reason when cancelling fails", async () => {
+    const message = "Sessions can't be cancelled or rescheduled within 24 hours of the start."
+    stubAs(member, {
+      [sessionsPath]: () => sessions([changeable]),
+      'POST /api/v1/appointments/1/cancel': () => json(409, { error: message }),
+    })
+    const { user } = renderAt('/sessions')
+
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel session' }))
+
+    expect(await screen.findByText(message)).toBeInTheDocument()
+  })
+
+  it('shows why a session close to its start can not be changed, with no buttons', async () => {
+    const notice = "Sessions can't be cancelled or rescheduled within 24 hours of the start."
+    stubAs(member, { [sessionsPath]: () => sessions([{ ...mondaySession, can_cancel: false, can_reschedule: false, notice }]) })
+    renderAt('/sessions')
+
+    expect(await screen.findByText(notice)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Reschedule' })).not.toBeInTheDocument()
+  })
+
+  it("moves a session to a new time from the professional's calendar", async () => {
+    const slot = {
+      appointment_date: '2026-11-10',
+      start_at: '09:00:00',
+      end_at: '09:50:00',
+      label: '6:30 AM',
+      professional_label: 'Tuesday, 10 November at 9:00 AM (Asia/Singapore)',
+    }
+    const api = stubAs(member, {
+      [sessionsPath]: () => sessions([changeable]),
+      'GET /api/v1/professionals/2': () =>
+        json(200, {
+          professional: { id: 2, name: 'Alex Professional' },
+          timezone_label: 'Asia/Kolkata (GMT+05:30)',
+          session_minutes: 50,
+          weekdays: ['Tue'],
+          days: [{ date: '2026-11-10', label: 'Tuesday, 10 November', short_label: '10 Nov', slots: [slot] }],
+        }),
+      'POST /api/v1/appointments/1/reschedule': () => json(200, { appointment: { id: 1 } }),
+    })
+    const { user } = renderAt('/sessions')
+
+    await user.click(await screen.findByRole('link', { name: 'Reschedule' }))
+    expect(await screen.findByRole('heading', { name: 'Reschedule with Alex Professional' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Tuesday, 10 November' }))
+    await user.click(screen.getByRole('button', { name: '6:30 AM' }))
+    await user.click(screen.getByRole('button', { name: 'Move my session' }))
+
+    expect(await screen.findByText('Your session has been moved.')).toBeInTheDocument()
+    expect(api.requestTo('POST /api/v1/appointments/1/reschedule').body).toEqual({
+      appointment_date: '2026-11-10',
+      start_at: '09:00:00',
+      end_at: '09:50:00',
+    })
+    expect(screen.queryByRole('button', { name: 'Book another appointment' })).not.toBeInTheDocument()
+  })
+
+  it('lets a professional cancel, but not reschedule', async () => {
+    const scheduled = { ...changeable, can_reschedule: false, member: { id: 1, name: 'Sam Member' } }
+    const api = stubAs(professional, {
+      [sessionsPath]: () => json(200, { timezone: 'Asia/Singapore', upcoming: [scheduled] }),
+      'POST /api/v1/appointments/1/cancel': () => json(200, { appointment: { id: 1, status: 'cancelled' } }),
+    })
+    const { user } = renderAt('/schedule')
+
+    expect(await screen.findByRole('button', { name: 'Cancel' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Reschedule' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByRole('dialog')).toHaveTextContent('with Sam Member.')
+    await user.click(screen.getByRole('button', { name: 'Cancel session' }))
+
+    await waitFor(() => expect(api.requests.map((request) => request.key)).toContain('POST /api/v1/appointments/1/cancel'))
+  })
+})

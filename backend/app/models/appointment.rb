@@ -11,17 +11,18 @@ class Appointment < ApplicationRecord
   validate :end_time_after_start_time
   validate :member_is_a_member
   validate :professional_is_a_professional
-  # Only when booking, so a later change to timezone rules can't stop an appointment being cancelled.
-  validate :time_is_valid_for_both_people, on: :create
+  validate :time_is_valid_for_both_people, if: :time_changing?
 
-  # from and to are real moments. Each row is converted using its own timezone.
-  scope :overlapping, ->(from, to) {
-    where(
-      "((appointments.appointment_date + appointments.start_time) AT TIME ZONE appointments.timezone) < ? AND " \
-      "((appointments.appointment_date + appointments.end_time) AT TIME ZONE appointments.timezone) > ?",
-      to, from
-    )
-  }
+  # The real start and end of each row, converted using its own timezone.
+  STARTS_AT_SQL = "((appointments.appointment_date + appointments.start_time) AT TIME ZONE appointments.timezone)"
+  ENDS_AT_SQL = "((appointments.appointment_date + appointments.end_time) AT TIME ZONE appointments.timezone)"
+
+  # from, to and now are real moments.
+  scope :overlapping, ->(from, to) { where("#{STARTS_AT_SQL} < ? AND #{ENDS_AT_SQL} > ?", to, from) }
+  # A session that has started but not ended is still upcoming. Soonest first.
+  scope :upcoming, ->(now) { where("#{ENDS_AT_SQL} > ?", now).order(Arel.sql(STARTS_AT_SQL), :id) }
+  # Most recent first.
+  scope :past, ->(now) { where("#{ENDS_AT_SQL} <= ?", now).order(Arel.sql("#{STARTS_AT_SQL} DESC"), id: :desc) }
 
   def starts_at_utc
     time_at_utc(start_time)
@@ -39,6 +40,11 @@ class Appointment < ApplicationRecord
 
   def clock_reading(time)
     [ appointment_date.year, appointment_date.month, appointment_date.day, time.hour, time.min, time.sec ]
+  end
+
+  def time_changing?
+    will_save_change_to_appointment_date? || will_save_change_to_start_time? ||
+      will_save_change_to_end_time? || will_save_change_to_timezone?
   end
 
   def time_is_valid_for_both_people

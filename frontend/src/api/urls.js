@@ -9,4 +9,6 @@ export const API_URLS = {
   professionals: '/api/v1/professionals',
   professional: (id) => `/api/v1/professionals/${id}`,
   appointments: '/api/v1/appointments',
+  cancelAppointment: (id) => `/api/v1/appointments/${id}/cancel`,
+  rescheduleAppointment: (id) => `/api/v1/appointments/${id}/reschedule`,
 }

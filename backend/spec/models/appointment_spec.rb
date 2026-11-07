@@ -61,6 +61,16 @@ RSpec.describe Appointment, type: :model do
       expect(appointment_at("2027-03-14", "12:00", "12:50", timezone: "Asia/Kolkata")).to be_valid
     end
 
+    it "checks again when a saved appointment is moved to a new time" do
+      appointment = appointment_at("2026-03-08", "00:30", "01:20")
+      appointment.save!
+
+      appointment.assign_attributes(start_time: "01:30", end_time: "03:20")
+
+      expect(appointment).not_to be_valid
+      expect(appointment.errors[:base]).to eq([ Appointment::INVALID_TIME ])
+    end
+
     it "doesn't stop a saved appointment being cancelled later" do
       appointment = appointment_at("2026-03-08", "01:30", "03:20")
       appointment.save!(validate: false)

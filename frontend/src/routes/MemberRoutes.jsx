@@ -13,6 +13,7 @@ export const memberRoutes = [
       { path: '/', element: <HomePage /> },
       { path: '/professionals', element: <FindProfessionalPage /> },
       { path: '/professionals/:id', element: <ProfessionalProfilePage /> },
+      { path: '/professionals/:id/reschedule/:appointmentId', element: <ProfessionalProfilePage /> },
       { path: '/sessions', element: <MySessionsPage /> },
     ],
   },

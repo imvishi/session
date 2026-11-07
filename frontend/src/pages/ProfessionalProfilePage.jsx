@@ -1,7 +1,7 @@
 import { Alert, Box, Button, CircularProgress, Container, Link, Paper, Stack, Tooltip, Typography } from '@mui/material'
 import { useState } from 'react'
 import { Link as RouterLink, useParams } from 'react-router-dom'
-import { useCreateAppointmentMutation } from '../api/appointmentsApi'
+import { useCreateAppointmentMutation, useRescheduleAppointmentMutation } from '../api/appointmentsApi'
 import { errorMessage } from '../api/errors'
 import { useGetProfessionalCalendarQuery } from '../api/professionalsApi'
 
@@ -69,8 +69,11 @@ function AppointmentDetails({ calendar, choice }) {
   )
 }
 
-function AppointmentFlow({ calendar }) {
-  const [book, { error, isLoading, reset }] = useCreateAppointmentMutation()
+/** Books a new session, or with rescheduleId, moves that session to the chosen time. */
+function AppointmentFlow({ calendar, rescheduleId }) {
+  const [book, booking] = useCreateAppointmentMutation()
+  const [reschedule, rescheduling] = useRescheduleAppointmentMutation()
+  const { error, isLoading, reset } = rescheduleId ? rescheduling : booking
   const [selectedDate, setSelectedDate] = useState(null)
   const [choice, setChoice] = useState(null)
   const [isBooked, setIsBooked] = useState(false)
@@ -81,7 +84,11 @@ function AppointmentFlow({ calendar }) {
   async function confirm() {
     try {
       const { appointment_date, start_at, end_at } = choice.slot
-      await book({ professional_id: calendar.professional.id, appointment_date, start_at, end_at }).unwrap()
+      const slot = { appointment_date, start_at, end_at }
+      await (rescheduleId
+        ? reschedule({ id: rescheduleId, ...slot })
+        : book({ professional_id: calendar.professional.id, ...slot })
+      ).unwrap()
       setIsBooked(true)
     } catch {
       // Back to the calendar, which refreshes, with the reason shown above it.
@@ -104,16 +111,18 @@ function AppointmentFlow({ calendar }) {
     return (
       <Stack spacing={2} sx={{ alignItems: 'flex-start' }}>
         <Alert severity="success" sx={{ alignSelf: 'stretch' }}>
-          Your appointment is booked.
+          {rescheduleId ? 'Your session has been moved.' : 'Your appointment is booked.'}
         </Alert>
         <AppointmentDetails calendar={calendar} choice={choice} />
         <Stack direction="row" spacing={1}>
           <Button variant="contained" component={RouterLink} to="/sessions">
             View my sessions
           </Button>
-          <Button variant="outlined" onClick={bookAnother}>
-            Book another appointment
-          </Button>
+          {!rescheduleId && (
+            <Button variant="outlined" onClick={bookAnother}>
+              Book another appointment
+            </Button>
+          )}
         </Stack>
       </Stack>
     )
@@ -123,12 +132,12 @@ function AppointmentFlow({ calendar }) {
     return (
       <Stack spacing={2} sx={{ alignItems: 'flex-start' }}>
         <Typography component="h2" variant="h6">
-          Confirm your appointment
+          {rescheduleId ? 'Confirm the new time' : 'Confirm your appointment'}
         </Typography>
         <AppointmentDetails calendar={calendar} choice={choice} />
         <Stack direction="row" spacing={1}>
           <Button variant="contained" disabled={isLoading} onClick={confirm}>
-            {isLoading ? 'Confirming…' : 'Confirm appointment'}
+            {isLoading ? 'Confirming…' : rescheduleId ? 'Move my session' : 'Confirm appointment'}
           </Button>
           <Button disabled={isLoading} onClick={() => setChoice(null)}>
             Go back
@@ -154,16 +163,23 @@ function AppointmentFlow({ calendar }) {
   )
 }
 
+/** With an appointmentId in the route, it reschedules that session instead of booking a new one. */
 export function ProfessionalProfilePage() {
-  const { id } = useParams()
+  const { id, appointmentId } = useParams()
   const { data: calendar, error, isLoading, refetch } = useGetProfessionalCalendarQuery(id)
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
       <Stack spacing={2}>
-        <Link component={RouterLink} to="/professionals" variant="body2">
-          All professionals
-        </Link>
+        {appointmentId ? (
+          <Link component={RouterLink} to="/sessions" variant="body2">
+            My sessions
+          </Link>
+        ) : (
+          <Link component={RouterLink} to="/professionals" variant="body2">
+            All professionals
+          </Link>
+        )}
         {isLoading && <CircularProgress aria-label="Loading" sx={{ alignSelf: 'center' }} />}
         {error && !calendar && (
           <Alert
@@ -180,13 +196,13 @@ export function ProfessionalProfilePage() {
         {calendar && (
           <>
             <Typography variant="h5" component="h1" sx={{ fontWeight: 600 }}>
-              {calendar.professional.name}
+              {appointmentId ? `Reschedule with ${calendar.professional.name}` : calendar.professional.name}
             </Typography>
             <Typography sx={{ color: 'text.secondary' }}>
               Times are shown in your time zone (<strong>{calendar.timezone_label}</strong>).
             </Typography>
             <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
-              <AppointmentFlow calendar={calendar} />
+              <AppointmentFlow calendar={calendar} rescheduleId={appointmentId} />
             </Paper>
           </>
         )}

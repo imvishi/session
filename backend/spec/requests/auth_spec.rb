@@ -272,7 +272,8 @@ RSpec.describe "Authentication", type: :request do
 
   describe "routes" do
     it "doesn't expose Devise's account management routes" do
-      paths = Rails.application.routes.routes.map { |route| route.path.spec.to_s }
+      # Cancelling an appointment is ours, not Devise's account cancel.
+      paths = Rails.application.routes.routes.map { |route| route.path.spec.to_s }.grep_v(%r{\A/api/v1/appointments/})
 
       expect(paths.grep(%r{password|users|cancel|edit})).to be_empty
     end

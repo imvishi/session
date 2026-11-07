@@ -16,7 +16,12 @@ Rails.application.routes.draw do
 
       resource :availability, only: [ :show, :update ]
       resources :professionals, only: [ :index, :show ]
-      resources :appointments, only: [ :create ]
+      resources :appointments, only: [ :index, :create ] do
+        member do
+          post :cancel
+          post :reschedule
+        end
+      end
     end
   end
 

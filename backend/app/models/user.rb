@@ -14,4 +14,9 @@ class User < ApplicationRecord
 
   validates :name, presence: true, length: { maximum: 100 }
   validates :timezone, iana_timezone: true
+
+  # The sessions this person is part of, in whichever role they have.
+  def appointments
+    member? ? member_appointments : professional_appointments
+  end
 end

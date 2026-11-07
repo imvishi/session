@@ -5,45 +5,32 @@ class BookAppointment
   SLOT_TAKEN = "This time has just been booked by someone else. Please choose another."
   BOOKING_FAILED = "We can't book this time right now. Please try again later."
 
-  # appointment_date, start_at and end_at are on the professional's clock, as the calendar sends them.
-  def initialize(member:, professional:, appointment_date:, start_at:, end_at:)
-    @member = member
-    @professional = professional
-    @requested = [ appointment_date, start_at, end_at ].map(&:to_s)
-  end
-
-  # Returns the appointment, or raises Unavailable with a message for the member.
-  def call
-    slot = requested_slot or raise Unavailable, NOT_A_SLOT
-
-    create_appointment(slot)
+  # Turns the database refusing an appointment's time into Unavailable, with a message for the member.
+  def self.explaining_failures
+    yield
   rescue ActiveRecord::ExclusionViolation
-    # The database decides, so an appointment can't slip in between a check here and the insert.
+    # The database decides, so an appointment can't slip in between a check here and the write.
     raise Unavailable, SLOT_TAKEN
   rescue ActiveRecord::RecordInvalid => error
     raise Unavailable, error.record.errors.full_messages.to_sentence
   rescue ActiveRecord::Deadlocked
-    # Two overlapping inserts can each wait on the other's constraint check, and Postgres then aborts one.
+    # Two overlapping writes can each wait on the other's constraint check, and Postgres then aborts one.
     raise Unavailable, BOOKING_FAILED
   end
 
-  private
-
-  def create_appointment(slot)
-    Appointment.create!(
-      member: @member, professional: @professional,
-      **slot.local_attributes(@professional.timezone)
-    )
+  # appointment_date, start_at and end_at are on the professional's clock, as the calendar sends them.
+  def initialize(member:, professional:, appointment_date:, start_at:, end_at:)
+    @member = member
+    @professional = professional
+    @requested = { appointment_date:, start_at:, end_at: }
   end
 
-  # It must be a real slot right now, which also rules out past and made-up times.
-  def requested_slot
-    now = Time.current
+  # Returns the appointment, or raises Unavailable with a message for the member.
+  def call
+    slot = SlotGenerator.new(@professional).find(**@requested) or raise Unavailable, NOT_A_SLOT
 
-    SlotGenerator.new(@professional).slots(from: now, to: now + SlotGenerator::APPOINTMENT_WINDOW).find do |slot|
-      local = slot.local_attributes(@professional.timezone)
-
-      [ local[:appointment_date].iso8601, local[:start_time], local[:end_time] ] == @requested
+    self.class.explaining_failures do
+      Appointment.create!(member: @member, professional: @professional, **slot.local_attributes(@professional.timezone))
     end
   end
 end

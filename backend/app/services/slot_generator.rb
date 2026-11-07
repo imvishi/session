@@ -23,8 +23,20 @@ class SlotGenerator
   end
 
   def initialize(professional)
-    @zone = ActiveSupport::TimeZone[professional.timezone]
+    @timezone = professional.timezone
+    @zone = ActiveSupport::TimeZone[@timezone]
     @hours_by_day = professional.working_hours.index_by(&:day_of_week)
+  end
+
+  def find(appointment_date:, start_at:, end_at:)
+    requested = [ appointment_date, start_at, end_at ].map(&:to_s)
+    now = Time.current
+
+    slots(from: now, to: now + APPOINTMENT_WINDOW).find do |slot|
+      local = slot.local_attributes(@timezone)
+
+      [ local[:appointment_date].iso8601, local[:start_time], local[:end_time] ] == requested
+    end
   end
 
   # Slots starting in from...to, in UTC and in time order.
