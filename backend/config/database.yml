@@ -18,13 +18,17 @@ default: &default
   # For details on connection pooling, see Rails configuration guide
   # https://guides.rubyonrails.org/configuring.html#database-pooling
   max_connections: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  # Set by docker compose. Unset locally, which keeps the default socket and OS user.
+  host: <%= ENV["DATABASE_HOST"] %>
+  username: <%= ENV["DATABASE_USERNAME"] %>
+  password: <%= ENV["DATABASE_PASSWORD"] %>
 
 
 development:
   primary:
     <<: *default
     database: thoughfull_development
-  # Solid Queue's jobs, including the recurring reminder delivery, so they survive a restart.
+  # Solid Queue's jobs, including each reminder's scheduled delivery, so they survive a restart.
   queue:
     <<: *default
     database: thoughfull_development_queue

@@ -1,0 +1,18 @@
+# Development image for docker compose. The Dockerfile next to it is Rails' production image.
+FROM docker.io/library/ruby:3.4.7-slim
+
+WORKDIR /rails
+
+RUN apt-get update -qq && \
+    apt-get install --no-install-recommends -y build-essential git libpq-dev libyaml-dev pkg-config postgresql-client && \
+    rm -rf /var/lib/apt/lists /var/cache/apt/archives
+
+COPY Gemfile Gemfile.lock ./
+RUN bundle install
+
+COPY . .
+
+EXPOSE 3000
+# Creates both databases (app and Solid Queue) on the first run and migrates them after that.
+# Puma runs Solid Queue in development, so this one process also delivers reminders.
+CMD ["bash", "-c", "rm -f tmp/pids/server.pid && bin/rails db:prepare && bin/rails server -b 0.0.0.0 -p 3000"]
